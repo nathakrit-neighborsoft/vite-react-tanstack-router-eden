@@ -1,66 +1,44 @@
 ---
 name: eden-api-integration
-description: Use when changing Eden Treaty API calls, Better Auth client code, VITE_API_URL, src/lib/api, generated server types, or backend integration in this Drone frontend repo.
+description: Use when adding or changing Eden Treaty requests, Better Auth client configuration, VITE_API_URL, API response handling, generated server types, or authenticated backend integration in this Vite + React starter.
 ---
 
 # Eden API Integration
 
-## Overview
+Use a typed boundary: backend contract → generated `App` type → shared `api` client → feature hook or mutation → feature-owned query keys.
 
-Typed API layer using `@elysiajs/eden` Treaty client with cookie-based auth.
+## Apply by branch
 
-## VITE_API_URL rules
+- API client, auth client, environment, proxy, or backend contract → use this skill.
+- Route loaders, router context, query-key shape, or cache ownership → also use `tanstack-router-query`.
+- Boilerplate boundaries and replaceable sample features → use `frontend-boilerplate-development`.
 
-- Must be **origin only** — no path. Correct: `http://localhost:3050`. Wrong: `http://localhost:3050/api`.
-- Eden Treaty appends server route paths itself (e.g. `api.api.drone.get()` → `/api/drone`).
-- Local dev uses Vite proxy. Production uses nginx proxy.
-- Setting `VITE_API_URL=` (empty) uses same-origin proxy.
+## Integration steps
 
-## Auth
+1. **Inspect the boundary.** Read `src/lib/env.ts`, `src/lib/api/client.ts`, the owning feature's `api/keys.ts`, and its hooks. Identify whether `src/lib/api/server.d.ts` is stale. Continue when the endpoint, owner, and generated-file boundary are known.
 
-- All API calls use `credentials: 'include'` for cookie-based session auth.
-- Auth client is `better-auth/react` via `src/features/auth/auth-client.ts`.
-- Auth form component: `src/features/auth/components/AuthForm.tsx`.
+2. **Sync the contract.** After a backend contract change, run `bun run gen:types`. Treat `src/lib/api/server.d.ts` as generated output: the command updates it, and the backend must be reachable for new routes to appear. Continue when the generated `App` type contains the endpoint and inputs you need.
 
-## Client location
+3. **Use the shared client.** Feature code imports `api` from `@/lib/api/client`, `handleEdenResponse` from `@/lib/api/eden-helpers`, and `useEdenQuery` from `@/lib/api/use-eden-query`. Keep endpoint calls and response unwrapping in feature hooks/API modules so routes and components stay thin.
 
-`src/lib/api/client.ts`:
+4. **Preserve cookie auth.** `VITE_API_URL` is an origin only (`http://localhost:3050`), never an `/api` path. An empty value uses the same-origin Vite/nginx proxy. Eden appends the server route path, and the shared client sends `credentials: 'include'`. Keep Better Auth's client in `src/features/auth/auth-client.ts` with `baseURL: env.VITE_API_URL || undefined`.
 
-```typescript
-import { treaty } from '@elysiajs/eden'
-import { env } from '@/env'
-import type { App } from './server'
+5. **Close the cache loop.** Put keys in the owning feature's `api/keys.ts`. Every successful create, update, or delete mutation invalidates that feature's root key, such as `featureKeys.all`, so lists and details cannot remain stale.
 
-const baseURL = env.VITE_API_URL || ''
-export const api = treaty<App>(baseURL, { fetch: { credentials: 'include' } })
-```
+## Current proxy map
 
-## Generated server types
+| Browser path | Dev target                         |
+| ------------ | ---------------------------------- |
+| `/api/*`     | `http://localhost:3050/*`          |
+| `/auth/*`    | `http://localhost:3050/api/auth/*` |
 
-`src/lib/api/server.d.ts` is fetched from the backend:
+The map lives in `vite.config.ts`; production proxy behavior is configured separately in `nginx.conf`.
 
-```bash
-bun run gen:types
-```
+## Verification
 
-This hits `http://localhost:3050/server.d.ts`. If unreachable, the old types are kept.
+- Contract or API TypeScript change: `bun run gen:types && bun run typecheck`
+- Feature behavior or mutation change: `bun run test`
+- Lint-sensitive change: `bun run lint`
+- Routing, proxy, or production configuration change: `bun run build`
 
-## Helpers
-
-- `handleEdenResponse<T>({ result, fallbackMessage })` — extracts `.data` or throws.
-- `useEdenQuery<T>(queryKey, fn, options?)` — wraps `useQuery` + `handleEdenResponse`.
-
-## Data invalidation
-
-After mutations (create/update/delete), always invalidate:
-
-```typescript
-qc.invalidateQueries({ queryKey: dronesKeys.all })
-```
-
-## Vite proxy (dev)
-
-| Path      | Target                             |
-| --------- | ---------------------------------- |
-| `/api/*`  | `http://localhost:3050/*`          |
-| `/auth/*` | `http://localhost:3050/api/auth/*` |
+The integration is complete when the generated contract is current, the feature uses the shared client/helpers, cookie and URL behavior match the proxy, every mutation invalidates its owning keys, and the checks relevant to the changed branch pass.

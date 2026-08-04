@@ -1,60 +1,48 @@
 ---
 name: frontend-boilerplate-development
-description: Use when working in this Vite + React frontend boilerplate, especially before changing routes, feature modules, API/auth integration, project structure, scripts, or starter UI.
+description: Use when changing the reusable Vite + React starter's routes, feature modules, shared UI, app setup, scripts, or replaceable sample code.
 ---
 
 # Frontend Boilerplate Development
 
-## Overview
+Treat this repository as a starter, not as the identity of its current sample domain. Shared code stays domain-neutral; product behavior lives in a feature module.
 
-This repository is a reusable frontend starter for bootstrapping new projects. Treat domain-specific modules as replaceable examples and preserve the shared architecture while the new project establishes its own domain.
+## Scope decision
 
-## Before editing
+1. Read `AGENTS.md`, the relevant `README.md` sections, and the target files. Record generated-file boundaries and existing tests before editing.
+2. Classify each change:
+   - `src/routes/` — thin route composition and route-specific loader wiring.
+   - `src/features/<feature>/` — product UI, hooks, API modules, query keys, types, and tests.
+   - `src/components/ui/`, `src/lib/`, and `src/app/` — reusable, domain-neutral building blocks.
+   - `src/routeTree.gen.ts` and `src/lib/api/server.d.ts` — generated output.
+3. Choose the smallest branch:
+   - Starter maintenance → preserve replaceable sample modules unless removal is requested.
+   - New product behavior → add or replace a complete feature unit and update its route, exports, tests, keys, and types together.
 
-1. Read `AGENTS.md` and `README.md` for project rules, commands, and current starter integrations.
-2. Read the files related to the request and identify generated files, shared modules, and feature-local code.
-3. Decide whether the change belongs in reusable boilerplate or in a replaceable sample feature.
+The scope is clear when every changed file has an owner, every sample-domain reference that must move is listed, and generated outputs have a regeneration command.
 
-Continue when the target files, affected conventions, and generated-file boundaries are clear.
+## Shared boundaries
 
-## Conventions
+- Keep routes as composition points; place feature logic under `src/features/<feature>/`.
+- Reuse existing UI primitives, hooks, helpers, types, and tests before introducing new abstractions or dependencies.
+- Use Bun for project commands and keep `bun.lock` authoritative.
+- Keep product labels, API assumptions, and feature-specific state out of shared UI, `src/lib/`, and shared app registration.
 
-- Use Bun for all scripts (`bun`, not `npm`, `yarn`, or `pnpm`).
-- Keep TanStack Router route files thin; put feature logic in `src/features/<feature>/`.
-- Keep shared components and utilities domain-neutral.
-- Reuse existing UI primitives, hooks, API helpers, types, and tests before adding abstractions.
-- Keep changes minimal and focused.
-- Inspect `git status` before broad edits and preserve pre-existing worktree changes.
-- Do not edit `src/routeTree.gen.ts` or `src/lib/api/server.d.ts`; regenerate them with the project tooling.
+**REQUIRED SUB-SKILL:** Use `eden-api-integration` when the change touches Eden Treaty, Better Auth, `VITE_API_URL`, API helpers, generated server types, or backend integration.
 
-## Starter boundary
+**REQUIRED SUB-SKILL:** Use `tanstack-router-query` when the change adds routes, loaders, router context, query keys, mutations, or server-state fetching.
 
-- Do not treat the current sample feature names as the identity of the repository.
-- Put new product behavior under a feature module and keep routes as composition points.
-- When replacing sample code, update its route, exports, tests, query keys, and types together.
-- Avoid putting product-specific assumptions into `src/components/ui/`, `src/lib/`, or shared app setup.
+## Generated boundaries
 
-## API and auth integration
-
-- Keep `VITE_API_URL` origin-only; an empty value uses the same-origin proxy.
-- Use `credentials: 'include'` for cookie-based calls.
-- Use `handleEdenResponse` or `useEdenQuery` from `@/lib/api/` for typed API responses.
-- Keep query keys in the owning feature and invalidate the relevant keys after mutations.
-- Regenerate `src/lib/api/server.d.ts` with `bun run gen:types` when the backend contract changes.
+- Add, rename, or remove route files, then let the TanStack Router plugin regenerate `src/routeTree.gen.ts` through the normal Vite command (`bun run dev` or `bun run build`).
+- Regenerate `src/lib/api/server.d.ts` with `bun run gen:types` after a backend contract change.
+- Keep generated files as tool output; review their diff rather than hand-editing them.
 
 ## Verification
 
-Run the smallest check that covers the change:
+- TypeScript or feature code: `bun run typecheck` and the relevant `bun run test` scope.
+- Route, shared configuration, or production behavior: `bun run build`.
+- Lint-sensitive changes: `bun run lint`.
+- Documentation/frontmatter changes: `bun run format:check` when formatting is affected.
 
-- Markdown/frontmatter-only → inspect the changed files and run `bun run format:check` when applicable.
-- TypeScript → `bun run typecheck`.
-- Feature behavior → `bun run test`.
-- Linting → `bun run lint`.
-- Routing, shared configuration, or production behavior → `bun run build`.
-
-## Guardrails
-
-- No new dependencies without asking.
-- No commits or pushes without asking.
-- Edit only files required by the request; do not modify, delete, or stage unrelated files.
-- No generated-file edits, alternate package-manager lockfiles, or unrelated refactors.
+Finish when the requested behavior is implemented in the correct boundary, related feature files agree, generated outputs are current, relevant checks pass, and unrelated work remains untouched.

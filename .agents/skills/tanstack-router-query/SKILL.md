@@ -1,58 +1,54 @@
 ---
 name: tanstack-router-query
-description: Use when editing TanStack Router routes, route loaders, src/app/router.ts, React Query hooks, query keys, or route-driven data loading in this Drone frontend repo.
+description: Use when adding or changing TanStack Router routes, route loaders, router context, TanStack Query hooks, query keys, mutations, or cache invalidation in this Vite + React starter.
 ---
 
 # TanStack Router + Query
 
-## Overview
+Treat routing and server state as one boundary: routes compose and prefetch; feature modules own request functions, query keys, hooks, and mutations.
 
-File-based routing (TanStack Router) + server state management (TanStack Query).
+## Server-state flow
 
-## Router
+1. **Define ownership.** Put keys and reusable query options/functions in the owning feature's `api/` module. Use one stable root key for the feature:
 
-- Route files in `src/routes/`. File-based. Do not manually edit `src/routeTree.gen.ts`.
-- Router setup in `src/app/router.ts` — register types there.
-- Keep route components thin; import from `src/features/*`.
-- Routes use `createFileRoute` from `@tanstack/react-router`.
+   ```typescript
+   export const projectsKeys = {
+     all: ['projects'] as const,
+     lists: () => [...projectsKeys.all, 'list'] as const,
+     details: () => [...projectsKeys.all, 'detail'] as const,
+     detail: (id: string | number) => [...projectsKeys.details(), id] as const,
+   }
+   ```
 
-## Query
+   Replace `projects` with the feature name. The ownership is complete when list, detail, and mutation consumers use the same key factory rather than inline strings.
 
-- React Query client is passed via router context (`context.queryClient`).
-- Route loaders can use `context.queryClient.ensureQueryData(...)` for prefetch.
-- Use `@/lib/api/use-eden-query` wrapper instead of raw `useQuery` for API calls.
+2. **Prefetch at the route boundary.** A file route uses `createFileRoute`. When navigation needs server data, its loader calls `context.queryClient.ensureQueryData(featureQueryOptions())`; the query options/query function stay in the feature API module. The route component composes the feature page instead of fetching in render.
 
-## Query keys
+3. **Read in feature hooks.** API-backed component queries use `useEdenQuery` from `@/lib/api/use-eden-query` with the feature key factory. Keep request and response handling in the feature hook/API module. Use raw `useQuery` only for a non-Eden data source or an explicit infrastructure case.
 
-Keys live in feature `api/keys.ts`:
+4. **Invalidate after writes.** Each successful create, update, or delete mutation calls `queryClient.invalidateQueries({ queryKey: featureKeys.all })`. Include narrower detail keys when the mutation has a separate detail cache. The mutation is complete when every affected list/detail view refetches from the owning key family.
 
-```typescript
-export const dronesKeys = {
-  all: ['drones'] as const,
-  lists: () => [...dronesKeys.all, 'list'] as const,
-  details: () => [...dronesKeys.all, 'detail'] as const,
-  detail: (id: number) => [...dronesKeys.details(), id] as const,
-}
-```
+## Router typing and generated routes
 
-## Mutation invalidation
+- Pass `QueryClient` through `context` in `src/app/router.ts`; type the root context with `createRootRouteWithContext` in `src/routes/__root.tsx`.
+- Keep the registration in `src/app/router.ts` so `Link`, `useNavigate`, and `useParams` remain type-safe:
 
-Always invalidate after mutations:
-
-```typescript
-onSuccess: () => qc.invalidateQueries({ queryKey: dronesKeys.all })
-```
-
-## Type safety
-
-Register router type in `src/app/router.ts`:
-
-```typescript
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
+  ```typescript
+  declare module '@tanstack/react-router' {
+    interface Register {
+      router: typeof router
+    }
   }
-}
-```
+  ```
 
-This makes `Link`, `useNavigate`, `useParams` type-safe.
+- Add or rename files under `src/routes/`, then let the TanStack Router plugin regenerate `src/routeTree.gen.ts` through `bun run dev` or `bun run build`. Review generated output; the route tree is not a hand-maintained source file.
+
+**REQUIRED SUB-SKILL:** Use `eden-api-integration` when the query or mutation touches Eden Treaty, Better Auth, `VITE_API_URL`, response helpers, or generated backend types.
+
+## Verification
+
+- Route or router-context change: `bun run typecheck && bun run build`
+- Query, mutation, or feature behavior: `bun run test`
+- Lint-sensitive change: `bun run lint`
+
+Finish when the route is thin, prefetching uses typed router context, feature hooks and keys own server state, every successful write invalidates its key family, generated routes are current, and relevant checks pass.
